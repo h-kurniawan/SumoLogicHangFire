@@ -3,17 +3,39 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using Hangfire;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
+using SumoLogicHangfire.Configurations;
 using SumoLogicHangfire.Models;
 
 namespace SumoLogicHangfire.Services
 {
     public class ApiCallService : IApiCallService
     {
-        private readonly Random _rand = new Random();
+        private readonly AppSettings _appSettings;
+        private readonly IBackgroundJobClient _jobClient;
+        private readonly ILogger _logger;
+
+        public ApiCallService(IOptions<AppSettings> appSettingsAccessor, IBackgroundJobClient jobClient, 
+            ILogger<ApiCallService> logger)
+        {
+            _appSettings = appSettingsAccessor.Value;
+            _jobClient = jobClient;
+            _logger = logger;
+        }
 
         [Queue("http"), AutomaticRetry(Attempts = 0)]
         public async Task CallApiAsync(ApiData apiData)
         {
+            //await Task.Delay(_appSettings.ApiThrottlingInMillisecond);
+
+            _logger.LogInformation(
+                $"{DateTimeOffset.UtcNow.ToString("yyyy/MM/dd HH:mm:ss.fff")} - " +
+                JsonConvert.SerializeObject(new {
+                    apiData.HttpMethod, SearchApi = apiData.SearchApi.ToString(), apiData.RequestUri, apiData.SearchJobId })
+            );
+
             var request = new HttpRequestMessage(apiData.HttpMethod, apiData.RequestUri);
             if (!string.IsNullOrEmpty(apiData.JsonPayload))
                 request.Content = new StringContent(apiData.JsonPayload, Encoding.UTF8, "application/json");
@@ -29,14 +51,8 @@ namespace SumoLogicHangfire.Services
                     SearchJobId = apiData.SearchJobId
                 };
 
-                BackgroundJob.Enqueue<SumoLogic>((s) => s.Callback(apiData.SearchApi, apiResponse));
+                _jobClient.Enqueue<SumoLogic>((s) => s.Callback(apiData.SearchApi, apiResponse));
             }
         }
-
-        //private string GetSearchJobId(HttpResponseMessage response)
-        //{
-        //    if (response.Headers.Location != null)
-
-        //}
     }
 }

@@ -1,14 +1,21 @@
-﻿using Hangfire;
+﻿using System;
+using Hangfire;
 using Hangfire.Logging;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SumoLogicHangfire.Configurations;
 using SumoLogicHangfire.Services;
 
 namespace SumoLogicHangfire
 {
     public class Startup
     {
+        public IConfiguration Configuration { get; set; }
+
+        public Startup(IConfiguration configuration) => Configuration = configuration;
+
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
@@ -22,6 +29,7 @@ namespace SumoLogicHangfire
             services.AddMemoryCache();
 
             services                
+                .Configure<AppSettings>(Configuration)
                 .AddMvcCore()
                 .AddJsonFormatters()
                 .AddDataAnnotations();
@@ -42,7 +50,9 @@ namespace SumoLogicHangfire
             app.UseHangfireDashboard();
             var options = new BackgroundJobServerOptions
             {
-                Queues = new[] { "http", "callback" }
+                Queues = new[] { "http", "callback" },
+                WorkerCount = 4
+                //SchedulePollingInterval = TimeSpan.FromMilliseconds(250)
             };
             app.UseHangfireServer(options);
 

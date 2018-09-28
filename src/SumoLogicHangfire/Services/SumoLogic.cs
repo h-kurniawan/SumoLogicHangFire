@@ -117,12 +117,12 @@ namespace SumoLogicHangfire.Services
                     DeleteSearchJobCallback(response);
                     break;
             }
-
-            _logger.LogInformation($"StatusCode: {response.StatusCode}");
         }
 
         private void CreateSearchJobCallback(ApiResponse apiResponse)
         {
+            _logger.LogInformation(JsonConvert.SerializeObject(new { apiResponse.StatusCode, apiResponse.Content }));
+
             if (apiResponse.StatusCode == HttpStatusCode.Accepted)
             {
                 var searchJobResponse = JsonConvert.DeserializeObject<SearchJobResponse>(apiResponse.Content);
@@ -138,6 +138,8 @@ namespace SumoLogicHangfire.Services
 
         private void GetJobStatusCallback(ApiResponse apiResponse)
         {
+            _logger.LogInformation(JsonConvert.SerializeObject(new { apiResponse.StatusCode, apiResponse.Content }));
+
             if (apiResponse.StatusCode == HttpStatusCode.OK)
             {
                 var jobStatusResponse = JsonConvert.DeserializeObject<GetJobStatusResponse>(apiResponse.Content);
@@ -162,6 +164,8 @@ namespace SumoLogicHangfire.Services
 
         private void GetMessagesCallback(ApiResponse apiResponse)
         {
+            _logger.LogInformation(JsonConvert.SerializeObject(new { apiResponse.StatusCode }));
+
             var logMiningInfo = _memoryCache.GetOrCreate<LogMiningInfo>(apiResponse.SearchJobId, (c) => new LogMiningInfo());
 
             if (apiResponse.StatusCode == HttpStatusCode.OK)
@@ -187,6 +191,8 @@ namespace SumoLogicHangfire.Services
 
         private void DeleteSearchJobCallback(ApiResponse apiResponse)
         {
+            _logger.LogInformation(JsonConvert.SerializeObject(new { apiResponse.StatusCode }));
+
             if (apiResponse.StatusCode == HttpStatusCode.TooManyRequests)
                 DeleteSearchJob(apiResponse.SearchJobId);
             // else other error handling here
@@ -194,8 +200,10 @@ namespace SumoLogicHangfire.Services
 
         private void ScheduleApiCall(ApiData apiData)
         {
-            _jobClient.Schedule(() => 
-                _apiCall.CallApiAsync(apiData), TimeSpan.FromMilliseconds(250));
+            _jobClient.Enqueue(() =>
+                _apiCall.CallApiAsync(apiData));
+            //_jobClient.Schedule(() =>
+            //    _apiCall.CallApiAsync(apiData), TimeSpan.FromMilliseconds(250));
         }
     }
 }
