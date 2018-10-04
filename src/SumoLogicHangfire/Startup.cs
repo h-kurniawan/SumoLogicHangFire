@@ -55,7 +55,7 @@ namespace SumoLogicHangfire
             app.UseHangfireDashboard();
             var options = new BackgroundJobServerOptions
             {
-                Queues = new[] { "http", "callback" },
+                Queues = new[] { "api", "callback" },
                 WorkerCount = 4
                 //SchedulePollingInterval = TimeSpan.FromMilliseconds(250)
             };

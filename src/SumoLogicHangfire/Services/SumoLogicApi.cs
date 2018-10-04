@@ -26,7 +26,7 @@ namespace SumoLogicHangfire.Services
             _logger = logger;
         }
 
-        [Queue("http"), AutomaticRetry(Attempts = 0)]
+        [Queue("api"), AutomaticRetry(Attempts = 0)]
         public async Task CallApiAsync(ApiData apiData)
         {
             _logger.LogInformation(
