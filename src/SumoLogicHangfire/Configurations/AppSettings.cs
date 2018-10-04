@@ -1,12 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
-namespace SumoLogicHangfire.Configurations
+﻿namespace SumoLogicHangfire.Configurations
 {
     public class AppSettings
     {
-        public int ApiThrottlingInMillisecond { get; set; }
+        public SumoLogicSettings SumoLogicSettings { get; set; }
     }
 }

@@ -10,14 +10,14 @@ namespace SumoLogicHangfire.Controllers
     [Route("api/v1/[controller]")]
     public class LogsController : Controller
     {
-        private readonly ISumoLogic _sumoLogic;
+        private readonly ISumoLogMining _sumoLogic;
         private readonly IBackgroundJobClient _jobClient;
         private readonly ILogger _logger;
 
         private const string MineStatusCompleted = "COMPLETED";
         private const string MineStatusCancelled = "CANCELLED";
 
-        public LogsController(ISumoLogic sumoLogic, IBackgroundJobClient jobClient, ILogger<LogsController> logger)
+        public LogsController(ISumoLogMining sumoLogic, IBackgroundJobClient jobClient, ILogger<LogsController> logger)
 
         {
             _jobClient = jobClient;

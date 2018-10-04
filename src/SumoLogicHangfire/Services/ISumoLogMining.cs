@@ -11,7 +11,7 @@ namespace SumoLogicHangfire.Services
         DeleteSearchJob
     }
 
-    public interface ISumoLogic
+    public interface ISumoLogMining
     {
         void MineLog(MineLogRequest mineLogRequest, Uri callback);
         void Callback(SearchApi searchApi, ApiResponse response);

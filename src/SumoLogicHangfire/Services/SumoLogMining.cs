@@ -2,33 +2,38 @@
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using SumoLogicHangfire.Configurations;
 using SumoLogicHangfire.Models;
 using System;
 using System.Net;
 using System.Net.Http;
+using System.Linq;
 
 namespace SumoLogicHangfire.Services
 {
-    public class SumoLogic : ISumoLogic
+    public class SumoLogMining : ISumoLogMining
     {
         private const string JsonMediaType = "application/json";
         private const int MessageBatchLimit = 1000;
 
+        private readonly SumoLogicSettings _sumoLogicSettings;
         private readonly IBackgroundJobClient _jobClient;
         private readonly IApiCallService _apiCall;
         private readonly IMemoryCache _memoryCache;
-        private Uri _baseAddress;
         ILogger _logger;
 
-        public SumoLogic(IBackgroundJobClient jobClient, IApiCallService apiCall
-            , ILogger<SumoLogic> logger, IMemoryCache memoryCache)
+        public SumoLogMining(
+            SumoLogicSettings sumoLogicSettings,
+            IBackgroundJobClient jobClient, 
+            IApiCallService apiCall, 
+            ILogger<SumoLogMining> logger, 
+            IMemoryCache memoryCache)
         {
+            _sumoLogicSettings = sumoLogicSettings;
             _jobClient = jobClient;
             _apiCall = apiCall;
             _logger = logger;
             _memoryCache = memoryCache;
-
-            _baseAddress = new Uri("http://localhost:1259");
         }
 
         public void MineLog(MineLogRequest mineLogRequest, Uri callback)
@@ -36,7 +41,7 @@ namespace SumoLogicHangfire.Services
             var searchJobRequest = new SearchJobRequest
             {
                 Query = mineLogRequest.Query,
-                From = mineLogRequest.To.ToUnixTimeMilliseconds(),
+                From = mineLogRequest.From.ToUnixTimeMilliseconds(),
                 To = mineLogRequest.To.ToUnixTimeMilliseconds()
             };
             CreateSearchJob(searchJobRequest);
@@ -54,7 +59,7 @@ namespace SumoLogicHangfire.Services
             {
                 SearchApi = SearchApi.CreateSearchJob,
                 HttpMethod = HttpMethod.Post,
-                RequestUri = new Uri(_baseAddress, "api/v1/search/jobs"),
+                RequestUri = new Uri(_sumoLogicSettings.BaseUri, "search/jobs"),
                 JsonPayload = jsonPayload
             };
             ScheduleApiCall(apiData);
@@ -66,7 +71,7 @@ namespace SumoLogicHangfire.Services
             {
                 SearchApi = SearchApi.GetJobStatus,
                 HttpMethod = HttpMethod.Get,
-                RequestUri = new Uri(_baseAddress, $"api/v1/search/jobs/{jobId}"),
+                RequestUri = new Uri(_sumoLogicSettings.BaseUri, $"search/jobs/{jobId}"),
                 SearchJobId = jobId
             };
             ScheduleApiCall(apiData);
@@ -75,7 +80,7 @@ namespace SumoLogicHangfire.Services
         private void GetMessages(string jobId, int offset)
         {
             var getMessagesUri = new Uri(
-                _baseAddress, $"api/v1/search/jobs/{jobId}/messages?offset={offset}&limit={MessageBatchLimit}");
+                _sumoLogicSettings.BaseUri, $"search/jobs/{jobId}/messages?offset={offset}&limit={MessageBatchLimit}");
 
             var apiData = new ApiData
             {
@@ -93,7 +98,7 @@ namespace SumoLogicHangfire.Services
             {
                 SearchApi = SearchApi.DeleteSearchJob,
                 HttpMethod = HttpMethod.Delete,
-                RequestUri = new Uri(_baseAddress, $"api/v1/search/jobs/{jobId}"),
+                RequestUri = new Uri(_sumoLogicSettings.BaseUri, $"search/jobs/{jobId}"),
                 SearchJobId = jobId
             };
             ScheduleApiCall(apiData);
@@ -151,8 +156,8 @@ namespace SumoLogicHangfire.Services
                         GetJobStatus(apiResponse.SearchJobId);
                         break;
                     case "DONE GATHERING RESULTS":
-                        var logMiningInfo = new LogMiningInfo { TotalMessageCount = jobStatusResponse.MessageCount };
-                        _memoryCache.Set<LogMiningInfo>(apiResponse.SearchJobId, logMiningInfo);
+                        var logMiningInfo = new LogMiningState { TotalMessageCount = jobStatusResponse.MessageCount };
+                        _memoryCache.Set<LogMiningState>(apiResponse.SearchJobId, logMiningInfo);
                         GetMessages(apiResponse.SearchJobId, logMiningInfo.CurrentMessageCount);
                         break;
                 }
@@ -166,7 +171,7 @@ namespace SumoLogicHangfire.Services
         {
             _logger.LogInformation(JsonConvert.SerializeObject(new { apiResponse.StatusCode }));
 
-            var logMiningInfo = _memoryCache.GetOrCreate<LogMiningInfo>(apiResponse.SearchJobId, (c) => new LogMiningInfo());
+            var logMiningState = _memoryCache.GetOrCreate(apiResponse.SearchJobId, (c) => new LogMiningState());
 
             if (apiResponse.StatusCode == HttpStatusCode.OK)
             {
@@ -174,18 +179,17 @@ namespace SumoLogicHangfire.Services
                     JsonConvert.DeserializeObject<LogMessageResponse>(apiResponse.Content);
                 // Store messages to DB
 
-                logMiningInfo.CurrentMessageCount += messageResponse.Messages.Count;
+                logMiningState.CurrentMessageCount += messageResponse.Messages.Count;
+                logMiningState.LogMessages.AddRange(messageResponse.Messages.Select(m => m.Map.RawMessage));
+                _memoryCache.Set(apiResponse.SearchJobId, logMiningState);
 
-                if (logMiningInfo.CurrentMessageCount < logMiningInfo.TotalMessageCount)
-                {
-                    _memoryCache.Set<LogMiningInfo>(apiResponse.SearchJobId, logMiningInfo);
-                    GetMessages(apiResponse.SearchJobId, logMiningInfo.CurrentMessageCount);
-                }
+                if (logMiningState.CurrentMessageCount < logMiningState.TotalMessageCount)
+                    GetMessages(apiResponse.SearchJobId, logMiningState.CurrentMessageCount);
                 else
                     DeleteSearchJob(apiResponse.SearchJobId);
             }
             else if (apiResponse.StatusCode == HttpStatusCode.TooManyRequests)
-                GetMessages(apiResponse.SearchJobId, logMiningInfo.CurrentMessageCount);
+                GetMessages(apiResponse.SearchJobId, logMiningState.CurrentMessageCount);
             // else other error handling here
         }
 

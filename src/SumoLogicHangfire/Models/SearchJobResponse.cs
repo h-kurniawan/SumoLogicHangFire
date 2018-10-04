@@ -1,10 +1,16 @@
-﻿namespace SumoLogicHangfire.Models
+﻿using Newtonsoft.Json;
+
+namespace SumoLogicHangfire.Models
 {
     public class SearchJobResponse
     {
-        public int Status { get; set; }
+        public class HypermediaLink
+        {
+            [JsonProperty("href")]
+            public string SearchLocation { get; set; }
+        }
+
         public string Id { get; set; }
-        public string Code { get; set; }
-        public string Message { get; set; }
+        public HypermediaLink Link { get; set; }
     }
 }

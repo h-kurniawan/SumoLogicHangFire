@@ -34,8 +34,13 @@ namespace SumoLogicHangfire
                 .AddJsonFormatters()
                 .AddDataAnnotations();
 
-            services.AddTransient<ISumoLogic, SumoLogic>();
-            services.AddTransient<IApiCallService, ApiCallService>();
+            services.UseConfigurationValidation();
+            services.Configure<AppSettings>(Configuration);
+            services.ConfigureValidatableSetting<SumoLogicSettings>(
+                Configuration.GetSection($"{nameof(AppSettings)}:{nameof(SumoLogicSettings)}"));
+
+            services.AddTransient<ISumoLogMining, SumoLogMining>();
+            services.AddTransient<IApiCallService, SumoLogicApi>();
             services.AddTransient<IBackgroundJobClient, BackgroundJobClient>();
         }
 

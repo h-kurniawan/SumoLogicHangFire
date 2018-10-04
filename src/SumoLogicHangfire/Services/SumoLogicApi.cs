@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Hangfire;
@@ -11,16 +12,16 @@ using SumoLogicHangfire.Models;
 
 namespace SumoLogicHangfire.Services
 {
-    public class ApiCallService : IApiCallService
+    public class SumoLogicApi : IApiCallService
     {
-        private readonly AppSettings _appSettings;
+        private readonly SumoLogicSettings _sumoLogicSettings;
         private readonly IBackgroundJobClient _jobClient;
         private readonly ILogger _logger;
 
-        public ApiCallService(IOptions<AppSettings> appSettingsAccessor, IBackgroundJobClient jobClient, 
-            ILogger<ApiCallService> logger)
+        public SumoLogicApi(SumoLogicSettings sumoLogicSettings, IBackgroundJobClient jobClient, 
+            ILogger<SumoLogicApi> logger)
         {
-            _appSettings = appSettingsAccessor.Value;
+            _sumoLogicSettings = sumoLogicSettings;
             _jobClient = jobClient;
             _logger = logger;
         }
@@ -28,8 +29,6 @@ namespace SumoLogicHangfire.Services
         [Queue("http"), AutomaticRetry(Attempts = 0)]
         public async Task CallApiAsync(ApiData apiData)
         {
-            //await Task.Delay(_appSettings.ApiThrottlingInMillisecond);
-
             _logger.LogInformation(
                 $"{DateTimeOffset.UtcNow.ToString("yyyy/MM/dd HH:mm:ss.fff")} - " +
                 JsonConvert.SerializeObject(new {
@@ -37,6 +36,12 @@ namespace SumoLogicHangfire.Services
             );
 
             var request = new HttpRequestMessage(apiData.HttpMethod, apiData.RequestUri);
+            request.Headers.Authorization = 
+                new AuthenticationHeaderValue(
+                    "Basic", 
+                    Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_sumoLogicSettings.AccessId}:{_sumoLogicSettings.AccessKey}")));
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
             if (!string.IsNullOrEmpty(apiData.JsonPayload))
                 request.Content = new StringContent(apiData.JsonPayload, Encoding.UTF8, "application/json");
 
@@ -51,7 +56,7 @@ namespace SumoLogicHangfire.Services
                     SearchJobId = apiData.SearchJobId
                 };
 
-                _jobClient.Enqueue<SumoLogic>((s) => s.Callback(apiData.SearchApi, apiResponse));
+                _jobClient.Enqueue<SumoLogMining>((s) => s.Callback(apiData.SearchApi, apiResponse));
             }
         }
     }
